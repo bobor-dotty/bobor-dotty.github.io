@@ -151,14 +151,19 @@
       position: sticky; top: 0; z-index: 50;
       background: var(--header-bg);
       backdrop-filter: saturate(180%) blur(12px);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid transparent;
+      transition: border-color .25s ease, box-shadow .25s ease;
+    }
+    .site-header.scrolled {
+      border-bottom-color: var(--border);
+      box-shadow: var(--shadow);
     }
     .header-inner {
-      max-width: 960px; margin: 0 auto; padding: .6rem 1rem;
-      display: flex; align-items: center; gap: .75rem;
+      max-width: 960px; margin: 0 auto; padding: .45rem 1rem;
+      display: flex; align-items: center; gap: .6rem;
     }
     .brand {
-      font-weight: 700; color: var(--text); font-size: 1.02rem;
+      font-weight: 700; color: var(--text); font-size: .92rem;
       letter-spacing: .02em; margin-right: auto; white-space: nowrap;
     }
     .brand .dot { color: var(--accent); }
@@ -168,8 +173,9 @@
       list-style: none; margin: 0; padding: 0; display: flex; gap: .25rem;
     }
     .nav-list a {
-      display: inline-block; padding: .4rem .65rem; border-radius: 8px;
-      color: var(--text-muted); font-size: .94rem; white-space: nowrap;
+      display: inline-block; padding: .35rem .6rem; border-radius: 7px;
+      color: var(--text-muted); font-size: .78rem; white-space: nowrap;
+      letter-spacing: .01em;
     }
     .nav-list a:hover { color: var(--text); text-decoration: none; }
     .nav-list a.active { color: var(--accent); background: var(--accent-soft); }
@@ -222,20 +228,32 @@
     /* ============================================================
        4. Hero 首屏
        ============================================================ */
-    .hero { padding: 4rem 0 2.5rem; }
-    .hero-title { font-size: clamp(2.05rem, 6vw, 3rem); line-height: 1.12; margin-bottom: .6rem; max-width: 18em; font-weight: 800; letter-spacing: -.03em; }
-    .hero-role { font-size: 1.12rem; font-weight: 600; margin: 0 0 .35rem; }
-    .hero-sub { color: var(--text-muted); font-size: .98rem; margin-bottom: 1.15rem; }
-    .hero-meta { color: var(--text-muted); font-size: .9rem; margin: 0 0 1.5rem; }
+    .hero { padding: 7rem 0 5rem; }
+    .hero-kicker {
+      font-size: .88rem; color: var(--text-muted);
+      letter-spacing: .04em; margin: 0 0 1.75rem;
+    }
+    .hero-title {
+      font-size: clamp(2.8rem, 9vw, 5.5rem); line-height: 1.04;
+      margin-bottom: 1.35rem; max-width: 16em;
+      font-weight: 800; letter-spacing: -.04em;
+    }
+    .hero-lede {
+      font-size: clamp(1.05rem, 2.4vw, 1.3rem); line-height: 1.6;
+      color: var(--text); max-width: 32em; margin: 0 0 1.5rem;
+    }
+    .hero-meta { color: var(--text-muted); font-size: .9rem; margin: 0 0 1.75rem; }
     .hero-meta b { color: var(--text); font-weight: 700; }
     .hero-meta .stage-now { color: var(--amber); }
-    .focus-list { list-style: none; margin: 0 0 .5rem; padding: 0; }
+    .focus-list { list-style: none; margin: 0 0 .5rem; padding: 0; counter-reset: focus; }
     .focus-list li {
-      position: relative; padding-left: 1.1rem; margin-bottom: .3rem;
+      position: relative; padding-left: 2rem; margin-bottom: .55rem;
+      counter-increment: focus;
     }
     .focus-list li::before {
-      content: ""; position: absolute; left: 0; top: .55em;
-      width: .35rem; height: .35rem; border-radius: 50%; background: var(--border-strong);
+      content: counter(focus, decimal-leading-zero);
+      position: absolute; left: 0; top: .05em;
+      font-family: var(--font-mono); font-size: .82rem; color: var(--text-muted);
     }
 
     .hero-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
@@ -261,16 +279,16 @@
     /* ============================================================
        5. 区块通用
        ============================================================ */
-    .section { padding: 2.5rem 0; }
-    #about { padding-top: 3.25rem; }
-    #notes, #logs, #projects { padding: 2.15rem 0; }
-    #contact, #settings { padding: 2.75rem 0; }
-    .section + .section { border-top: 1px solid var(--border); }
+    .section { padding: 6rem 0; }
     .section-head {
       display: flex; align-items: baseline; justify-content: space-between;
-      gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap;
+      gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap;
     }
-    .section-head h2 { font-size: 1.5rem; margin: 0; font-weight: 800; letter-spacing: -.015em; }
+    .section-head h2 {
+      font-size: clamp(1.8rem, 5vw, 2.5rem);
+      margin: 0; font-weight: 800; letter-spacing: -.025em; line-height: 1.1;
+    }
+    @media (max-width: 767px) { .section { padding: 4rem 0; } }
 
     /* ============================================================
        6. 按钮
@@ -296,7 +314,6 @@
     /* ============================================================
        7. 卡片、标签、点赞
        ============================================================ */
-    .card-list, .project-grid { display: grid; gap: 1rem; }
     .card {
       background: var(--card); border: 1px solid var(--border);
       border-radius: 12px; padding: 1.1rem 1.15rem; box-shadow: var(--shadow);
@@ -391,29 +408,40 @@
     /* ============================================================
        10. 关于页技能墙
        ============================================================ */
-    .about-intro { margin-bottom: 1.25rem; }
+    .about-intro { margin-bottom: 2rem; }
+    .about-subhead {
+      font-size: 1.05rem; margin: 2rem 0 .75rem;
+      letter-spacing: .01em;
+    }
     .skill-head {
       display: flex; align-items: center; justify-content: space-between;
-      gap: 1rem; margin: 1.25rem 0 .75rem;
+      gap: 1rem; margin: 2rem 0 .9rem;
     }
     .skill-head h3 { margin: 0; }
-    .skill-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
-    @media (min-width: 620px) { .skill-grid { grid-template-columns: 1fr 1fr; } }
-    .skill-group { border: none; background: transparent; border-radius: 0; padding: 0; }
-    .skill-cat { font-size: .88rem; color: var(--text-muted); text-transform: none; margin-bottom: .55rem; }
-    .skill-list { list-style: none; margin: 0; padding: 0; }
-    .skill-item {
-      display: flex; align-items: center; gap: .5rem;
-      padding: .32rem 0; border-bottom: 1px dashed var(--border); flex-wrap: wrap;
+    .skill-flow { margin: .25rem 0 1rem; }
+    .skill-group { margin-bottom: 1.1rem; }
+    .skill-cat {
+      display: block; font-size: .8rem; color: var(--text-muted);
+      letter-spacing: .04em; margin-bottom: .6rem;
     }
-    .skill-item:last-child { border-bottom: none; }
+    .skill-flow-list {
+      list-style: none; margin: 0; padding: 0;
+      display: flex; flex-wrap: wrap; gap: .5rem;
+    }
+    .skill-tag {
+      display: inline-flex; align-items: center; gap: .4rem;
+      border: 1px solid var(--border); border-radius: 999px;
+      padding: .25rem .65rem; font-size: .86rem; background: var(--card);
+    }
+    .skill-tag.learned {
+      border-color: var(--accent); color: var(--accent-strong);
+      background: var(--accent-soft);
+    }
+    .skill-tag.planned { color: var(--text-muted); }
     .skill-name { font-weight: 600; }
-    .skill-status {
-      font-size: .75rem; padding: .05rem .5rem; border-radius: 999px; white-space: nowrap;
-    }
-    .skill-status.learned { background: var(--accent-soft); color: var(--accent); }
-    .skill-status.planned { background: var(--code-bg); color: var(--text-muted); border: 1px solid var(--border); }
-    .skill-item .item-actions { margin-left: auto; }
+    .skill-tag-status { font-size: .72rem; opacity: .7; }
+    .skill-tag .item-actions { display: inline-flex; gap: .2rem; }
+    .skill-tag .icon-btn { width: 1.5rem; height: 1.5rem; font-size: .76rem; border-radius: 999px; }
     .empty-mini { color: var(--text-muted); font-size: .88rem; margin: 0; }
 
     /* ============================================================
@@ -423,32 +451,55 @@
       list-style: none; margin: 0; padding: 0 0 0 1.35rem;
       border-left: 2px solid var(--border); margin-left: .35rem;
     }
-    .timeline-item { position: relative; margin-bottom: 1rem; }
+    .timeline-item { position: relative; margin-bottom: 2.75rem; }
     .timeline-item::before {
-      content: ""; position: absolute; left: -1.84rem; top: 1.2rem;
+      content: ""; position: absolute; left: -1.84rem; top: .55rem;
       width: .7rem; height: .7rem; border-radius: 50%;
       background: var(--accent); border: 3px solid var(--bg);
     }
+    .log-entry { background: transparent; border: none; padding: 0; }
+    .log-entry .card-title { font-size: clamp(1.25rem, 3vw, 1.6rem); }
     .log-date { font-weight: 700; color: var(--accent); }
 
     /* ============================================================
        12. 项目
        ============================================================ */
-    .project-grid { grid-template-columns: 1fr; }
-    @media (min-width: 620px) { .project-grid { grid-template-columns: 1fr 1fr; } }
-    .project-card { display: flex; flex-direction: column; transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
-    .project-card:hover { transform: translateY(-3px); border-color: var(--border-strong); box-shadow: var(--shadow); }
-    .project-card .card-foot { margin-top: auto; padding-top: .85rem; }
+    .project-list { display: block; }
+    .project-item { padding: 1.75rem 0; border-bottom: 1px solid var(--border); }
+    .project-item:last-child { border-bottom: none; }
+    .project-head { display: flex; align-items: flex-start; gap: 1rem; }
+    .project-toggle {
+      flex: 1; text-align: left; background: transparent; border: none;
+      cursor: pointer; padding: 0; color: inherit; display: block;
+    }
+    .project-toggle:hover .project-title { color: var(--accent); }
+    .project-title {
+      display: block; font-family: var(--font-display);
+      font-size: clamp(1.4rem, 4vw, 2rem); font-weight: 750;
+      line-height: 1.2; letter-spacing: -.015em; margin: 0 0 .35rem;
+    }
+    .project-desc {
+      display: block; color: var(--text-muted); font-size: .98rem;
+      margin: 0; max-width: 34em; line-height: 1.6;
+    }
+    .project-item .item-actions { flex-shrink: 0; }
+    .project-detail {
+      margin-top: 1.15rem; padding-top: 1.15rem;
+      border-top: 1px dashed var(--border);
+    }
+    .project-detail[hidden] { display: none; }
+    .project-detail .tags { margin-bottom: .85rem; }
+    .project-detail .md { margin-top: .35rem; }
 
     /* ============================================================
        13. 联系
        ============================================================ */
-    .contact-list { display: grid; gap: .5rem; margin-bottom: 1rem; }
+    .contact-list { display: grid; gap: 0; margin-bottom: 1.5rem; }
     .contact-item {
       display: flex; align-items: center; gap: .7rem; flex-wrap: wrap;
-      padding: .7rem .85rem; border: 1px solid var(--border); border-radius: 10px;
-      background: var(--card);
+      padding: .85rem 0; border-bottom: 1px solid var(--border);
     }
+    .contact-item:first-child { border-top: 1px solid var(--border); }
     .contact-label { color: var(--text-muted); font-size: .86rem; min-width: 3.5rem; }
     .contact-value { font-weight: 600; overflow-wrap: anywhere; }
     .contact-item .btn { margin-left: auto; }
@@ -565,10 +616,10 @@
     .note-list { display: block; }
     .note-item {
       background: transparent; box-shadow: none; border: none;
-      border-bottom: 1px solid var(--border); border-radius: 0; padding: 1.15rem 0;
+      border-bottom: 1px solid var(--border); border-radius: 0; padding: 1.75rem 0;
     }
     .note-item:last-child { border-bottom: none; }
-    .note-item .card-title { font-size: 1.18rem; }
+    .note-item .card-title { font-size: clamp(1.35rem, 3.5vw, 1.75rem); line-height: 1.25; }
     .note-item .card-meta { font-size: .8rem; }
     .note-item .body.collapsed::after { background: linear-gradient(to bottom, transparent, var(--bg)); }
 
@@ -584,7 +635,7 @@
     @keyframes loadslide { 0% { left: -40%; } 100% { left: 100%; } }
 
     /* 滚动 reveal（纯 CSS 过渡 + IntersectionObserver，不引入 GSAP） */
-    .reveal { opacity: 0; transform: translateY(16px); transition: opacity .55s ease, transform .55s ease; }
+    .reveal { opacity: 0; transform: translateY(20px); transition: opacity .7s ease, transform .7s ease; }
     .reveal.in { opacity: 1; transform: none; }
 
     .banner {
@@ -633,7 +684,7 @@
   <a class="skip-link" href="#main">跳到主要内容</a>
   <div class="banner" id="banner" hidden><span id="banner-text"></span><button type="button" class="banner-close" data-action="banner-close" aria-label="关闭提示">×</button></div>
 
-  <header class="site-header">
+  <header class="site-header" id="site-header">
     <div class="header-inner">
       <a class="brand" href="#hero"><span class="dot">■</span> 成长档案</a>
 
@@ -1445,15 +1496,14 @@
       var el = document.getElementById("hero-content");
       var stats = computeStats();
       el.innerHTML =
-        '<h1 class="hero-title">' + esc(data.meta.slogan || data.meta.role) + "</h1>" +
-        '<p class="hero-role">' + esc(data.meta.role) + "</p>" +
-        '<p class="hero-sub">' + esc(data.meta.subtitle) + "</p>" +
+        '<p class="hero-kicker">' + esc(data.meta.subtitle) + "</p>" +
+        '<h1 class="hero-title">' + esc(data.meta.role) + "</h1>" +
+        '<p class="hero-lede">' + esc(data.meta.slogan) + "</p>" +
         '<p class="hero-meta">已写 <b>' + stats.notes + "</b> 篇笔记 · <b>" + stats.logs + "</b> 条日志 · <b>" + stats.projects + "</b> 个项目 · 连续记录 <b>" + stats.streak + "</b> 天 · 已点亮 <b>" + stats.learned + "</b> 个技能" +
           (stats.currentStage ? ' · 当前阶段 <b class="stage-now">' + esc(stats.currentStage) + "</b>" : "") +
         "</p>" +
         '<div class="hero-actions">' +
           '<a class="btn btn-primary" href="#notes">最新笔记</a>' +
-          '<a class="btn" href="' + esc(safeUrl(data.meta.github)) + '" target="_blank" rel="noopener noreferrer">GitHub</a>' +
         "</div>";
     }
 
@@ -1464,14 +1514,14 @@
       var html = [];
 
       html.push('<div class="about-intro md">' + renderMarkdown(a.intro) + "</div>");
-      html.push("<h3>为什么是微电子 / 「一生一芯」</h3>");
+      html.push('<h3 class="about-subhead">为什么是微电子 / 「一生一芯」</h3>');
       html.push('<div class="md">' + renderMarkdown(a.why) + "</div>");
-      html.push("<h3>当前焦点</h3>");
-      html.push('<ul class="focus-list">' + (a.focus || []).map(function (f) {
+      html.push('<h3 class="about-subhead">当前焦点</h3>');
+      html.push('<ol class="focus-list">' + (a.focus || []).map(function (f) {
         return "<li>" + esc(f) + "</li>";
-      }).join("") + "</ul>");
+      }).join("") + "</ol>");
 
-      html.push("<h3>一生一芯学习路线</h3>");
+      html.push('<h3 class="about-subhead">一生一芯学习路线</h3>');
       html.push(renderRoadmap());
 
       html.push('<div class="skill-head"><h3>技能墙与 Flag</h3>' +
@@ -1482,12 +1532,12 @@
       data.skills.forEach(function (s) {
         (byCat[s.category] || (byCat[s.category] = [])).push(s);
       });
-      html.push('<div class="skill-grid">');
+      html.push('<div class="skill-flow">');
       SKILL_CATEGORIES.forEach(function (c) {
         var items = byCat[c] || [];
-        html.push('<div class="skill-group"><h4 class="skill-cat">' + esc(c) + "</h4>" +
+        html.push('<div class="skill-group"><span class="skill-cat">' + esc(c) + "</span>" +
           (items.length
-            ? '<ul class="skill-list">' + items.map(renderSkill).join("") + "</ul>"
+            ? '<ul class="skill-flow-list">' + items.map(renderSkill).join("") + "</ul>"
             : '<p class="empty-mini">暂无</p>') +
           "</div>");
       });
@@ -1498,10 +1548,9 @@
 
     function renderSkill(s) {
       var learned = s.status === "learned";
-      return '<li class="skill-item">' +
+      return '<li class="skill-tag' + (learned ? " learned" : " planned") + '">' +
         '<span class="skill-name">' + esc(s.name) + "</span>" +
-        '<span class="skill-status ' + (learned ? "learned" : "planned") + '">' +
-          (learned ? "已学会" : "计划学习") + "</span>" +
+        '<span class="skill-tag-status">' + (learned ? "已学会" : "计划学习") + "</span>" +
         '<span class="item-actions">' +
           '<button type="button" class="icon-btn edit-only" data-action="edit" data-type="skill" data-id="' + esc(s.id) + '" aria-label="编辑技能">✎</button>' +
           '<button type="button" class="icon-btn icon-danger edit-only" data-action="delete" data-type="skill" data-id="' + esc(s.id) + '" aria-label="删除技能">✕</button>' +
@@ -1580,7 +1629,7 @@
 
       var html = list.length
         ? '<ol class="timeline">' + list.map(function (l) {
-          return '<li class="timeline-item"><article class="card">' +
+          return '<li class="timeline-item"><article class="log-entry">' +
             '<div class="card-meta">' +
               '<time class="log-date" datetime="' + esc(l.date) + '">' + esc(l.date) + "</time>" +
               '<span class="item-actions">' + likeButton("log", l) +
@@ -1609,18 +1658,23 @@
       var list = data.projects.filter(function (p) { return !q || matchesSearch(p, q); });
 
       var html = list.length
-        ? '<div class="project-grid">' + list.map(function (p) {
+        ? '<div class="project-list">' + list.map(function (p) {
           var tags = (p.tags || []).map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("");
-          return '<article class="card project-card">' +
-            '<h3 class="card-title">' + highlight(p.name, ui.search) + "</h3>" +
-            '<p class="card-summary">' + highlight(p.desc, ui.search) + "</p>" +
-            '<div class="tags">' + tags + "</div>" +
-            '<div class="card-foot">' +
-              '<button type="button" class="btn btn-sm" data-action="detail" data-id="' + esc(p.id) + '">详情</button>' +
+          return '<article class="project-item">' +
+            '<div class="project-head">' +
+              '<button type="button" class="project-toggle" data-action="detail" data-id="' + esc(p.id) + '" aria-expanded="false">' +
+                '<span class="project-title">' + highlight(p.name, ui.search) + "</span>" +
+                '<span class="project-desc">' + highlight(p.desc, ui.search) + "</span>" +
+              "</button>" +
               '<span class="item-actions">' + likeButton("project", p) +
                 '<button type="button" class="icon-btn edit-only" data-action="edit" data-type="project" data-id="' + esc(p.id) + '" aria-label="编辑项目">✎</button>' +
                 '<button type="button" class="icon-btn icon-danger edit-only" data-action="delete" data-type="project" data-id="' + esc(p.id) + '" aria-label="删除项目">✕</button>' +
               "</span>" +
+            "</div>" +
+            '<div class="project-detail" data-id="' + esc(p.id) + '" hidden>' +
+              (tags ? '<div class="tags">' + tags + "</div>" : "") +
+              (p.link ? '<p><a class="text-link" href="' + esc(safeUrl(p.link)) + '" target="_blank" rel="noopener noreferrer">项目链接 →</a></p>' : "") +
+              (p.detail ? '<div class="md">' + renderMarkdown(p.detail) + "</div>" : "") +
             "</div>" +
           "</article>";
         }).join("") + "</div>"
@@ -1995,19 +2049,17 @@
 
     /* ---------------- 项目详情 ---------------- */
     function openDetail(id) {
-      var p = data.projects.find(function (x) { return x.id === id; });
-      if (!p) return;
-      var tags = (p.tags || []).map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("");
-      openModal(
-        '<div class="detail">' +
-          '<h3>' + esc(p.name) + "</h3>" +
-          '<p class="card-summary">' + esc(p.desc) + "</p>" +
-          '<div class="tags" style="margin-bottom:1rem">' + tags + "</div>" +
-          (p.link ? '<p><a class="text-link" href="' + esc(safeUrl(p.link)) + '" target="_blank" rel="noopener noreferrer">项目链接 →</a></p>' : "") +
-          '<div class="md">' + renderMarkdown(p.detail) + "</div>" +
-        "</div>",
-        { title: "项目详情" }
-      );
+      var detail = null, toggle = null;
+      document.querySelectorAll(".project-detail").forEach(function (d) {
+        if (d.getAttribute("data-id") === id) detail = d;
+      });
+      document.querySelectorAll(".project-toggle").forEach(function (t) {
+        if (t.getAttribute("data-id") === id) toggle = t;
+      });
+      if (!detail) return;
+      var willOpen = detail.hidden;
+      detail.hidden = !willOpen;
+      if (toggle) toggle.setAttribute("aria-expanded", String(willOpen));
     }
 
     /* ---------------- 点赞 ---------------- */
@@ -2416,10 +2468,12 @@
     });
     // 用 IntersectionObserver 观察 Hero，滚过首屏后再显示「回到顶部」按钮
     var heroEl = document.getElementById("hero");
+    var siteHeader = document.getElementById("site-header");
     if (heroEl && "IntersectionObserver" in window) {
       var topSpy = new IntersectionObserver(function (entries) {
         entries.forEach(function (entry) {
           backToTop.classList.toggle("visible", !entry.isIntersecting);
+          if (siteHeader) siteHeader.classList.toggle("scrolled", !entry.isIntersecting);
         });
       }, { threshold: 0, rootMargin: "-80px 0px 0px 0px" });
       topSpy.observe(heroEl);
