@@ -466,6 +466,11 @@
       border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text);
     }
     .setting-hint { color: var(--text-muted); font-size: .84rem; margin-top: .7rem; margin-bottom: 0; }
+    .sync-status { font-size: .88rem; color: var(--text-muted); margin: 0 0 .75rem; }
+    .sync-status.ok { color: var(--accent); }
+    .sync-status.err { color: var(--danger); }
+    .setting-card code { background: var(--code-bg); padding: .05em .35em; border-radius: 5px; font-size: .86em; }
+    .edit-toggle:disabled { opacity: .45; cursor: not-allowed; }
 
     /* ============================================================
        15. 模态框与确认框
@@ -647,7 +652,7 @@
 
   <footer class="site-footer">
     <div class="container">
-      <p>用 HTML / CSS / 原生 JavaScript 手写 · 托管于 GitHub Pages · 数据保存在你的浏览器本地</p>
+      <p>用 HTML / CSS / 原生 JavaScript 手写 · 托管于 GitHub Pages · 数据保存在 GitHub 仓库，跨设备同步</p>
     </div>
   </footer>
 
@@ -686,11 +691,18 @@
        渲染时先转义再解析，避免 XSS。
        ============================================================ */
 
-    var STORAGE_KEY = "ysyx-portfolio-data-v1";
+    var CACHE_KEY = "ysyx-portfolio-data-v1"; // 本地缓存 + 旧版本数据迁移
     var THEME_KEY = "ysyx-portfolio-theme";
+    var SYNC_PAT_KEY = "ysyx-github-pat";
+    var SYNC_CFG_KEY = "ysyx-sync-config";
     var FENCE = "```"; // 代码围栏符号，避免在模板字符串里直接写字面量
 
     var SKILL_CATEGORIES = ["语言", "工具", "理论", "其他"];
+
+    // 云同步：数据源为 GitHub 仓库中的 data.json（配置说明见文件末尾的大段注释）
+    var DEFAULT_SYNC_CONFIG = { owner: "bobor-dotty", repo: "bobor-dotty.github.io", branch: "main", path: "data.json" };
+    var syncConfig = loadSyncConfig();
+    var auth = { pat: readPat(), connected: false, sha: null, error: null };
 
     /* ---------------- 工具函数 ---------------- */
     function esc(s) {
@@ -869,7 +881,7 @@
     };
 
     /* ---------------- 状态 ---------------- */
-    var data = loadData();
+    var data = deepClone(DEFAULT_DATA); // 实际数据在 boot() 中异步从云端加载
     var ui = { search: "", noteCategory: "全部", expanded: {} };
     var pendingConfirm = null;
     var pendingImportMode = "merge";
@@ -954,22 +966,142 @@
       return t;
     }
 
-    /* ---------------- localStorage 读写与数据规范化 ---------------- */
-    function loadData() {
-      try {
-        var raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) return sanitizeData(JSON.parse(raw));
-      } catch (e) {
-        console.warn("读取本地数据失败，改用默认数据", e);
-      }
-      return deepClone(DEFAULT_DATA);
+    /* ---------------- 云存储（GitHub 仓库 data.json） ----------------
+       数据源是 GitHub 仓库里的 data.json：
+       - 已连接（有有效 Token）：通过 GitHub Contents API 读写，需要 sha 才能更新；
+       - 未连接（访客）：通过 raw.githubusercontent.com 只读。
+       localStorage 只用来缓存数据、保存 Token 和同步配置。
+       ------------------------------------------------------------ */
+    function readPat() {
+      try { return localStorage.getItem(SYNC_PAT_KEY) || ""; } catch (e) { return ""; }
     }
 
-    function saveData() {
+    function loadSyncConfig() {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        var raw = localStorage.getItem(SYNC_CFG_KEY);
+        if (raw) return Object.assign({}, DEFAULT_SYNC_CONFIG, JSON.parse(raw));
+      } catch (e) {}
+      return Object.assign({}, DEFAULT_SYNC_CONFIG);
+    }
+
+    function saveSyncConfig() {
+      try { localStorage.setItem(SYNC_CFG_KEY, JSON.stringify(syncConfig)); } catch (e) {}
+    }
+
+    function encodeBase64(str) {
+      var bytes = new TextEncoder().encode(str);
+      var bin = "";
+      for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return btoa(bin);
+    }
+
+    function decodeBase64(b64) {
+      var bin = atob(String(b64).replace(/\s/g, ""));
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new TextDecoder("utf-8").decode(bytes);
+    }
+
+    function ghHeaders() {
+      return {
+        Authorization: "Bearer " + auth.pat,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json"
+      };
+    }
+
+    async function ghValidate() {
+      auth.connected = false;
+      auth.error = null;
+      var url = "https://api.github.com/repos/" + encodeURIComponent(syncConfig.owner) + "/" + encodeURIComponent(syncConfig.repo);
+      try {
+        var res = await fetch(url, { headers: ghHeaders() });
+        if (res.ok) { auth.connected = true; return true; }
+        if (res.status === 404) auth.error = "仓库不存在，或 Token 没有该仓库权限";
+        else if (res.status === 401) auth.error = "Token 无效";
+        else auth.error = "连接失败（HTTP " + res.status + "）";
       } catch (e) {
-        showToast("保存失败：" + e.message);
+        auth.error = "网络错误";
+      }
+      return false;
+    }
+
+    async function fetchCloudData() {
+      var useApi = auth.connected && !!auth.pat;
+      var url = useApi
+        ? "https://api.github.com/repos/" + encodeURIComponent(syncConfig.owner) + "/" + encodeURIComponent(syncConfig.repo) + "/contents/" + encodeURIComponent(syncConfig.path) + "?ref=" + encodeURIComponent(syncConfig.branch)
+        : "https://raw.githubusercontent.com/" + encodeURIComponent(syncConfig.owner) + "/" + encodeURIComponent(syncConfig.repo) + "/" + encodeURIComponent(syncConfig.branch) + "/" + encodeURIComponent(syncConfig.path);
+      var res = await fetch(url, useApi ? { headers: ghHeaders() } : {});
+      if (res.status === 404) return null; // 云端还没有 data.json
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      if (useApi) {
+        var j = await res.json();
+        auth.sha = j.sha;
+        return JSON.parse(decodeBase64(j.content));
+      }
+      return res.json();
+    }
+
+    async function saveCloudData() {
+      if (!auth.connected || !auth.pat) throw new Error("尚未连接 GitHub");
+      var url = "https://api.github.com/repos/" + encodeURIComponent(syncConfig.owner) + "/" + encodeURIComponent(syncConfig.repo) + "/contents/" + encodeURIComponent(syncConfig.path);
+      var body = {
+        message: "chore: update " + syncConfig.path,
+        content: encodeBase64(JSON.stringify(data, null, 2)),
+        branch: syncConfig.branch
+      };
+      if (auth.sha) body.sha = auth.sha;
+      var res = await fetch(url, { method: "PUT", headers: ghHeaders(), body: JSON.stringify(body) });
+      if (res.status === 409) {
+        // sha 过期（云端已被其他设备修改）：重新拉取最新 sha 后重试一次
+        await fetchCloudData();
+        body.sha = auth.sha;
+        res = await fetch(url, { method: "PUT", headers: ghHeaders(), body: JSON.stringify(body) });
+      }
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      var j = await res.json();
+      if (j && j.content && j.content.sha) auth.sha = j.content.sha;
+    }
+
+    function isAuthenticated() { return auth.connected && !!auth.pat; }
+
+    function requireAuth() {
+      if (isAuthenticated()) return true;
+      showToast("请先在「设置 → 数据同步」中连接 GitHub");
+      return false;
+    }
+
+    function persistData() {
+      // 先写本地缓存，保证响应快、断网也能继续用
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch (e) {}
+      if (isAuthenticated()) {
+        saveCloudData().then(function () {
+          showToast("已同步到云端");
+        }, function (err) {
+          showToast("云端同步失败，已保存在本地：" + (err && err.message || err));
+        });
+      }
+    }
+
+    async function loadData() {
+      var cached = null;
+      try {
+        var raw = localStorage.getItem(CACHE_KEY);
+        if (raw) cached = sanitizeData(JSON.parse(raw));
+      } catch (e) {}
+      try {
+        var cloud = await fetchCloudData();
+        if (cloud) {
+          var d = sanitizeData(cloud);
+          try { localStorage.setItem(CACHE_KEY, JSON.stringify(d)); } catch (e) {}
+          return d;
+        }
+        return cached || deepClone(DEFAULT_DATA);
+      } catch (err) {
+        console.warn("云端数据加载失败，使用本地缓存", err);
+        auth.error = "云端加载失败，当前显示本地缓存";
+        return cached || deepClone(DEFAULT_DATA);
       }
     }
 
@@ -1234,7 +1366,8 @@
     }
 
     function likeButton(type, item) {
-      return '<button type="button" class="like-btn' + (item.liked ? " liked" : "") + '" data-action="like" data-type="' + type + '" data-id="' + esc(item.id) + '" aria-pressed="' + (item.liked ? "true" : "false") + '" aria-label="点赞">' +
+      var disabled = !isAuthenticated();
+      return '<button type="button" class="like-btn' + (item.liked ? " liked" : "") + '" data-action="like" data-type="' + type + '" data-id="' + esc(item.id) + '" aria-pressed="' + (item.liked ? "true" : "false") + '" aria-label="点赞"' + (disabled ? ' disabled title="登录后可点赞"' : "") + ">" +
         '<span aria-hidden="true">♥</span><span class="like-count">' + item.likes + "</span></button>";
     }
 
@@ -1281,6 +1414,22 @@
       el.innerHTML =
         '<div class="settings-grid">' +
           '<div class="setting-card">' +
+            "<h3>数据同步（跨设备）</h3>" +
+            '<p class="sync-status" id="sync-status">未连接</p>' +
+            '<div class="field"><span>GitHub 用户名 / 组织</span><input type="text" id="sync-owner" value="' + esc(syncConfig.owner) + '"></div>' +
+            '<div class="field"><span>仓库名</span><input type="text" id="sync-repo" value="' + esc(syncConfig.repo) + '"></div>' +
+            '<div class="field"><span>分支</span><input type="text" id="sync-branch" value="' + esc(syncConfig.branch) + '"></div>' +
+            '<div class="field"><span>数据文件路径</span><input type="text" id="sync-path" value="' + esc(syncConfig.path) + '"></div>' +
+            '<div class="field"><span>Personal Access Token（仅保存在本机）</span><input type="password" id="sync-pat" autocomplete="off" placeholder="github_pat_..."></div>' +
+            '<div class="btn-row">' +
+              '<button type="button" class="btn btn-sm btn-primary" data-action="sync-connect">连接并验证</button>' +
+              '<button type="button" class="btn btn-sm" data-action="sync-pull">从云端加载</button>' +
+              '<button type="button" class="btn btn-sm" data-action="sync-push">同步到云端</button>' +
+              '<button type="button" class="btn btn-sm" data-action="sync-disconnect">退出登录</button>' +
+            "</div>" +
+            '<p class="setting-hint">数据保存在仓库的 <code>' + esc(syncConfig.path) + '</code> 文件里，每次保存会自动提交 commit 并触发 GitHub Pages 重新部署。Token 只存本机浏览器，建议使用仅授权该仓库的细粒度令牌。</p>' +
+          "</div>" +
+          '<div class="setting-card">' +
             "<h3>外观</h3>" +
             '<label class="setting-row" for="theme-select">主题模式</label>' +
             '<select id="theme-select" class="select">' +
@@ -1288,7 +1437,7 @@
               '<option value="light">亮色</option>' +
               '<option value="dark">暗色</option>' +
             "</select>" +
-            '<p class="setting-hint">也可以点右上角的按钮快速切换。选择会保存在本地。</p>' +
+            '<p class="setting-hint">也可以点右上角的按钮快速切换。选择会保存在本机。</p>' +
           "</div>" +
           '<div class="setting-card">' +
             "<h3>数据管理</h3>" +
@@ -1299,11 +1448,13 @@
               '<button type="button" class="btn btn-sm" data-action="export-md">导出 Markdown</button>' +
               '<button type="button" class="btn btn-sm btn-danger" data-action="reset-data">重置默认数据</button>' +
             "</div>" +
-            '<p class="setting-hint">所有修改都保存在浏览器本地（localStorage），刷新不会丢失。导出 JSON 用于备份，导入可恢复或合并；导出 Markdown 方便提交到 GitHub 仓库。</p>' +
+            '<p class="setting-hint">导出 JSON 用于备份，导入可恢复或合并；导出 Markdown 方便提交到 GitHub 仓库。</p>' +
           "</div>" +
         "</div>";
       var select = el.querySelector("#theme-select");
       select.value = getThemePref();
+      var patInput = el.querySelector("#sync-pat");
+      if (patInput) patInput.value = auth.pat;
     }
 
     function renderAll() {
@@ -1313,7 +1464,6 @@
       renderLogs();
       renderProjects();
       renderContact();
-      renderSettings();
     }
 
     /* ---------------- 长文展开 / 折叠 ---------------- */
@@ -1482,6 +1632,7 @@
     function handleFormSubmit(form) {
       var type = form.getAttribute("data-form-type");
       var editingId = form.getAttribute("data-id");
+      if (!requireAuth()) return;
       var fd = new FormData(form);
       var values = {};
       FORM_DEFS[type].fields.forEach(function (f) { values[f.key] = fd.get(f.key) || ""; });
@@ -1531,7 +1682,7 @@
         upsert(getListName(type), obj, editingId);
       }
 
-      saveData();
+      persistData();
       renderAll();
       closeModal();
       showToast("已保存");
@@ -1554,6 +1705,7 @@
 
     /* ---------------- 删除 ---------------- */
     function handleDelete(type, id) {
+      if (!requireAuth()) return;
       var list = getList(type);
       var item = list.find(function (x) { return x.id === id; });
       var name = (item && (item.title || item.name)) || "这条内容";
@@ -1564,7 +1716,7 @@
         onConfirm: function () {
           var i = list.findIndex(function (x) { return x.id === id; });
           if (i >= 0) list.splice(i, 1);
-          saveData();
+          persistData();
           renderAll();
           showToast("已删除");
         }
@@ -1590,6 +1742,7 @@
 
     /* ---------------- 点赞 ---------------- */
     function handleLike(type, id) {
+      if (!requireAuth()) return;
       var item = getList(type).find(function (x) { return x.id === id; });
       if (!item) return;
       if (item.liked) {
@@ -1599,7 +1752,7 @@
         item.liked = true;
         item.likes = (item.likes || 0) + 1;
       }
-      saveData();
+      persistData();
       if (type === "note") renderNotes();
       else if (type === "log") renderLogs();
       else if (type === "project") renderProjects();
@@ -1707,14 +1860,15 @@
     }
 
     function resetData() {
+      if (!requireAuth()) return;
       openConfirm({
         title: "重置默认数据",
         message: "确定要清空所有修改并恢复初始占位内容吗？此操作无法撤销。",
         confirmLabel: "重置",
         onConfirm: function () {
-          try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
           data = deepClone(DEFAULT_DATA);
           clearFilters();
+          persistData();
           renderAll();
           showToast("已恢复默认数据");
         }
@@ -1784,6 +1938,7 @@
 
     /* ---------------- 编辑模式 ---------------- */
     function toggleEditMode() {
+      if (!requireAuth()) return;
       var on = document.body.classList.toggle("edit-mode");
       var btn = document.getElementById("edit-toggle");
       if (btn) {
@@ -1845,6 +2000,10 @@
           break;
         case "export-md": exportMarkdown(); break;
         case "reset-data": resetData(); break;
+        case "sync-connect": connectGitHub(); break;
+        case "sync-pull": pullCloud(); break;
+        case "sync-push": syncNow(); break;
+        case "sync-disconnect": disconnect(); break;
         case "confirm-yes": {
           var cb = pendingConfirm;
           pendingConfirm = null;
@@ -1879,6 +2038,7 @@
     });
 
     function handleImportFile(input) {
+      if (!requireAuth()) { input.value = ""; return; }
       var file = input.files && input.files[0];
       if (!file) return;
       var reader = new FileReader();
@@ -1890,7 +2050,7 @@
           } else {
             data = mergeData(data, sanitizeData(parsed));
           }
-          saveData();
+          persistData();
           clearFilters();
           renderAll();
           showToast("导入成功");
@@ -1984,11 +2144,134 @@
       sections.forEach(function (s) { spy.observe(s); });
     }
 
-    /* ---------------- 初始化 ---------------- */
-    renderAll();
+    /* ---------------- 云同步动作 ---------------- */
+    async function connectGitHub() {
+      var pat = (document.getElementById("sync-pat").value || "").trim();
+      var owner = (document.getElementById("sync-owner").value || "").trim();
+      var repo = (document.getElementById("sync-repo").value || "").trim();
+      var branch = (document.getElementById("sync-branch").value || "").trim() || "main";
+      var path = (document.getElementById("sync-path").value || "").trim() || "data.json";
+      if (!pat) { showToast("请先填入 Personal Access Token"); return; }
+      syncConfig = { owner: owner || DEFAULT_SYNC_CONFIG.owner, repo: repo || DEFAULT_SYNC_CONFIG.repo, branch: branch, path: path };
+      auth.pat = pat;
+      try { localStorage.setItem(SYNC_PAT_KEY, pat); } catch (e) {}
+      saveSyncConfig();
+      updateSyncUI();
+      var ok = await ghValidate();
+      if (!ok) { updateSyncUI(); updateAuthUI(); return; }
+      data = await loadData();
+      renderAll();
+      updateSyncUI();
+      updateAuthUI();
+      showToast("已连接 GitHub");
+    }
+
+    async function pullCloud() {
+      if (!requireAuth()) return;
+      data = await loadData();
+      renderAll();
+      updateSyncUI();
+      showToast("已从云端加载最新数据");
+    }
+
+    async function syncNow() {
+      if (!requireAuth()) return;
+      try {
+        await saveCloudData();
+        showToast("已同步到云端");
+      } catch (e) {
+        showToast("同步失败：" + (e && e.message || e));
+      }
+    }
+
+    function disconnect() {
+      auth.pat = "";
+      auth.connected = false;
+      auth.sha = null;
+      auth.error = null;
+      try { localStorage.removeItem(SYNC_PAT_KEY); } catch (e) {}
+      var patInput = document.getElementById("sync-pat");
+      if (patInput) patInput.value = "";
+      document.body.classList.remove("edit-mode");
+      var btn = document.getElementById("edit-toggle");
+      if (btn) { btn.textContent = "编辑模式"; btn.setAttribute("aria-pressed", "false"); }
+      renderAll();
+      updateSyncUI();
+      updateAuthUI();
+      showToast("已退出登录（只读模式）");
+    }
+
+    function updateSyncUI() {
+      var el = document.getElementById("sync-status");
+      if (!el) return;
+      if (auth.connected) {
+        el.textContent = "已连接 · " + syncConfig.owner + "/" + syncConfig.repo + " · " + syncConfig.branch + "/" + syncConfig.path;
+        el.className = "sync-status ok";
+      } else if (auth.error) {
+        el.textContent = "未连接 · " + auth.error;
+        el.className = "sync-status err";
+      } else {
+        el.textContent = "未连接（访客只读模式）";
+        el.className = "sync-status";
+      }
+    }
+
+    function updateAuthUI() {
+      var btn = document.getElementById("edit-toggle");
+      if (btn) btn.disabled = !isAuthenticated();
+    }
+
+    /* ---------------- 初始化（异步：先拉取云端数据） ---------------- */
+    async function boot() {
+      if (auth.pat) {
+        await ghValidate();
+      }
+      data = await loadData();
+      renderSettings();
+      renderAll();
+      updateSyncUI();
+      updateAuthUI();
+      setupScrollSpy();
+      if (auth.pat && !auth.connected) {
+        showToast("GitHub 连接失败：" + (auth.error || "请检查 Token 与仓库配置"));
+      }
+    }
+
     applyTheme();
-    setupScrollSpy();
+    boot();
   })();
+
+  /* ============================================================
+     跨设备同步（GitHub API）配置说明
+     ------------------------------------------------------------
+     本网站把完整数据保存在 GitHub 仓库的一个 JSON 文件里（默认 data.json）：
+     - 访客（未填 Token）：只读，通过 raw.githubusercontent.com 拉取该文件；
+     - 作者（已填 Token）：登录后可编辑，每次保存通过 GitHub Contents API
+       提交一个 commit 更新 data.json，GitHub Pages 会自动重新部署。
+     这样任何设备、任何浏览器打开网站，看到的都是同一份数据。
+
+     你需要做的配置：
+     1. 仓库保持公开，访客才能通过 raw 只读访问。
+     2. 生成一个「细粒度 Personal Access Token」：
+        GitHub → Settings → Developer settings → Personal access tokens
+        → Fine-grained tokens → Generate new token
+        - Repository access：Only select repositories →
+          选择 bobor-dotty/bobor-dotty.github.io
+        - Permissions：Repository permissions → Contents → Read and write
+        - 其余权限保持关闭
+        复制生成的 token（形如 github_pat_...）。
+     3. 打开网站 → 设置 → 数据同步：
+        - 确认用户名 / 仓库名 / 分支 / 数据文件路径（默认已填好）
+        - 粘贴 token → 点「连接并验证」
+        - 点「同步到云端」，把当前内容首次写入 data.json
+     4. Token 只保存在本机浏览器 localStorage 里，请勿在公共电脑使用；
+        若泄露，立刻在 GitHub 撤销该 token。
+
+     备选方案（Supabase，适合以后多人协作或更严格鉴权）：
+     创建 Supabase 项目 → 建表（notes / logs / projects / skills / about / meta）
+     → 开启邮箱登录 → 用 Row Level Security 只允许登录用户写、所有人读，
+     并把 SUPABASE_URL / SUPABASE_ANON_KEY 填入代码里的占位常量处即可。
+     ============================================================ */
   </script>
 </body>
 </html>
