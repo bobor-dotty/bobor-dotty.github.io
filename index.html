@@ -590,6 +590,7 @@
       align-items: center; justify-content: center; gap: .8rem;
       background: var(--bg); color: var(--text-muted); font-size: .92rem;
     }
+    .loading-overlay[hidden] { display: none; }
     .spinner {
       width: 26px; height: 26px; border-radius: 50%;
       border: 3px solid var(--border-strong); border-top-color: var(--accent);
@@ -1108,6 +1109,21 @@
       try { localStorage.setItem(SYNC_CFG_KEY, JSON.stringify(syncConfig)); } catch (e) {}
     }
 
+    // 带超时的 fetch：避免网络不通时首屏一直卡在加载态
+    function fetchWithTimeout(url, options, ms) {
+      var controller = new AbortController();
+      var timer = setTimeout(function () { controller.abort(); }, ms || 8000);
+      var opts = options || {};
+      opts.signal = controller.signal;
+      return fetch(url, opts).then(function (res) {
+        clearTimeout(timer);
+        return res;
+      }, function (err) {
+        clearTimeout(timer);
+        throw err;
+      });
+    }
+
     function encodeBase64(str) {
       var bytes = new TextEncoder().encode(str);
       var bin = "";
@@ -1136,7 +1152,7 @@
       auth.error = null;
       var url = "https://api.github.com/repos/" + encodeURIComponent(syncConfig.owner) + "/" + encodeURIComponent(syncConfig.repo);
       try {
-        var res = await fetch(url, { headers: ghHeaders() });
+        var res = await fetchWithTimeout(url, { headers: ghHeaders() });
         if (res.ok) { auth.connected = true; return true; }
         if (res.status === 404) auth.error = "仓库不存在，或 Token 没有该仓库权限";
         else if (res.status === 401) auth.error = "Token 无效";
@@ -1152,7 +1168,7 @@
       var url = useApi
         ? "https://api.github.com/repos/" + encodeURIComponent(syncConfig.owner) + "/" + encodeURIComponent(syncConfig.repo) + "/contents/" + encodeURIComponent(syncConfig.path) + "?ref=" + encodeURIComponent(syncConfig.branch)
         : "https://raw.githubusercontent.com/" + encodeURIComponent(syncConfig.owner) + "/" + encodeURIComponent(syncConfig.repo) + "/" + encodeURIComponent(syncConfig.branch) + "/" + encodeURIComponent(syncConfig.path);
-      var res = await fetch(url, useApi ? { headers: ghHeaders() } : {});
+      var res = await fetchWithTimeout(url, useApi ? { headers: ghHeaders() } : {});
       if (res.status === 404) return null; // 云端还没有 data.json
       if (!res.ok) throw new Error("HTTP " + res.status);
       if (useApi) {
@@ -1172,12 +1188,12 @@
         branch: syncConfig.branch
       };
       if (auth.sha) body.sha = auth.sha;
-      var res = await fetch(url, { method: "PUT", headers: ghHeaders(), body: JSON.stringify(body) });
+      var res = await fetchWithTimeout(url, { method: "PUT", headers: ghHeaders(), body: JSON.stringify(body) });
       if (res.status === 409) {
         // sha 过期（云端已被其他设备修改）：重新拉取最新 sha 后重试一次
         await fetchCloudData();
         body.sha = auth.sha;
-        res = await fetch(url, { method: "PUT", headers: ghHeaders(), body: JSON.stringify(body) });
+        res = await fetchWithTimeout(url, { method: "PUT", headers: ghHeaders(), body: JSON.stringify(body) });
       }
       if (!res.ok) throw new Error("HTTP " + res.status);
       var j = await res.json();
@@ -2484,17 +2500,23 @@
 
     /* ---------------- 初始化（异步：先拉取云端数据） ---------------- */
     async function boot() {
-      if (auth.pat) {
-        await ghValidate();
+      try {
+        if (auth.pat) {
+          await ghValidate();
+        }
+        data = await loadData();
+        renderSettings();
+        renderAll();
+        updateSyncUI();
+        updateAuthUI();
+        setupScrollSpy();
+      } catch (err) {
+        console.error("boot error", err);
+        showBanner("页面加载出错：" + (err && err.message || err), "err");
+      } finally {
+        var loading = document.getElementById("loading");
+        if (loading) loading.hidden = true;
       }
-      data = await loadData();
-      renderSettings();
-      renderAll();
-      updateSyncUI();
-      updateAuthUI();
-      setupScrollSpy();
-      var loading = document.getElementById("loading");
-      if (loading) loading.hidden = true;
       if (auth.error) {
         showBanner(auth.error, "err");
       }
