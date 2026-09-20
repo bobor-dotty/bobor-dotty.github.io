@@ -120,7 +120,17 @@
       "liked": false
     }
   ],
-  "logs": [],
+  "logs": [
+    {
+      "id": "log-mu9mcskq-ypwaac",
+      "likes": 0,
+      "liked": false,
+      "date": "2026-09-20",
+      "title": "第一个个人网站",
+      "summary": "",
+      "body": ""
+    }
+  ],
   "projects": [
     {
       "id": "p2",
