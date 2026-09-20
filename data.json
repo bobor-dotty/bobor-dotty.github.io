@@ -192,17 +192,7 @@
       "body": "## 我的记录流程\n\n现在每天的流程基本固定下来：\n\n1. 用 Markdown 写笔记和日志；\n2. `git add` 之后 `git commit`，再 `git push` 到 GitHub；\n3. 每周翻一遍旧笔记，把已经懂的内容删繁就简。\n\n```bash\ngit add .\ngit commit -m \"docs: add verilog notes\"\ngit push origin main\n```\n\n这套流程的意义不只是「存档」，更是逼自己把学到的东西讲清楚。写不出来的地方，往往就是还没真懂的地方。"
     }
   ],
-  "logs": [
-    {
-      "id": "l4",
-      "date": "2026-09-20",
-      "title": "把 GitHub 仓库和这个网站一起整理好了",
-      "summary": "公开记录这件事，比想象中更需要勇气。",
-      "likes": 0,
-      "liked": false,
-      "body": "今天把 GitHub 仓库整理了一遍，给笔记和日志分了目录，顺便把这个网站也搭起来了。\n\n公开记录这件事，比想象中更需要一点勇气。写出来的东西不成熟，怕被笑话。但换个角度想，一年后再回来看，这些都是成长的证据。\n\n先把「坚持记录」这件事做好，剩下的交给时间。"
-    }
-  ],
+  "logs": [],
   "projects": [
     {
       "id": "p1",
